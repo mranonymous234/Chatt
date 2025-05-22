@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block content %}
+{# Define reusable profile image macro #}
+{% macro profile_image(src, alt, class_name, id='') %}
+    <img src="{{ url_for('static', filename='images/default.jpg') }}" 
+         alt="{{ alt }}" 
+         class="{{ class_name }}" 
+         {% if id %}id="{{ id }}"{% endif %}>
+{% endmacro %}
+
+<div class="chat-container">
+    <!-- Sidebar with user list -->
+    <div class="sidebar">
+        <div class="user-profile">
+            {{ profile_image(current_user.profile_pic, 'Profile', 'profile-pic') }}
+            <div class="user-info">
+                <h3>{{ current_user.username }}</h3>
+                <p class="status">{{ current_user.status }}</p>
+            </div>
+            <a href="{{ url_for('logout') }}" class="logout-btn" title="Logout">
+                <i class="fas fa-sign-out-alt"></i>
+            </a>
+        </div>
+        
+        <div class="user-list">
+            {% for user in users %}
+            <div class="user-item" data-user-id="{{ user.id }}">
+                {{ profile_image(user.profile_pic, user.username, 'user-pic') }}
+                <div class="user-info">
+                    <h4>{{ user.username }}</h4>
+                    <p class="last-message">Click to start chatting</p>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Chat area -->
+    <div class="chat-area">
+        <div class="chat-header">
+            <div class="chat-user-info">
+                <div class="back-button">
+                    <i class="fas fa-arrow-left"></i>
+                </div>
+                {{ profile_image('', '', 'user-pic', 'chat-user-pic') }}
+                <div class="user-details">
+                    <h3 id="chat-username">Select a chat</h3>
+                    <p class="status" id="chat-status">No chat selected</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="messages" id="messages">
+            <div class="no-messages-placeholder">
+                <i class="fas fa-comments"></i>
+                <p>Select a chat to start messaging</p>
+            </div>
+        </div>
+
+        <div class="message-input">
+            <form id="message-form">
+                <input type="text" 
+                       id="message-text" 
+                       placeholder="Type a message..." 
+                       autocomplete="off"
+                       disabled>
+                <button type="submit" disabled>
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+<script>
+const chatConfig = {
+    currentUserId: {{ current_user.id }},
+    defaultProfilePic: '{{ url_for('static', filename='images/default.jpg') }}'
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    const socket = io();
+    let currentChatUserId = null;
+    const messageForm = document.getElementById('message-form');
+    const messageInput = document.getElementById('message-text');
+    const messagesDiv = document.getElementById('messages');
+    const userItems = document.querySelectorAll('.user-item');
+    const chatUsername = document.getElementById('chat-username');
+    const chatStatus = document.getElementById('chat-status');
+    const submitButton = messageForm.querySelector('button');
+
+    // Enable input when chat is selected
+    function enableChat() {
+        messageInput.disabled = false;
+        submitButton.disabled = false;
+        messageInput.focus();  // Auto-focus the input
+    }
+
+    // Disable input when no chat is selected
+    function disableChat() {
+        messageInput.disabled = true;
+        submitButton.disabled = true;
+    }
+
+    // Handle user selection
+    userItems.forEach(userItem => {
+        userItem.addEventListener('click', () => {
+            const userId = userItem.dataset.userId;
+            const username = userItem.querySelector('h4').textContent;
+            const status = userItem.querySelector('.last-message').textContent;
+            
+            currentChatUserId = userId;
+            chatUsername.textContent = username;
+            chatStatus.textContent = status;
+            
+            // Enable chat input
+            enableChat();
+            
+            // Clear messages
+            messagesDiv.innerHTML = '';
+            
+            // Join room
+            socket.emit('join', {
+                sender_id: chatConfig.currentUserId,
+                receiver_id: userId
+            });
+            
+            // Load previous messages
+            fetch(`/get_messages/${userId}`)
+                .then(response => response.json())
+                .then(messages => {
+                    messages.forEach(addMessageToChat);
+                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                });
+        });
+    });
+
+    // Handle message sending
+    messageForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const messageText = messageInput.value.trim();
+        
+        if (messageText && currentChatUserId) {
+            const messageData = {
+                sender_id: chatConfig.currentUserId,
+                receiver_id: currentChatUserId,
+                content: messageText
+            };
+            
+            socket.emit('message', messageData);
+            messageInput.value = '';
+            messageInput.focus();  // Keep focus on input after sending
+        }
+    });
+
+    // Handle receiving messages
+    socket.on('message', (data) => {
+        // Only add message if it's for the current chat
+        if (currentChatUserId && 
+            (data.sender_id == currentChatUserId || data.receiver_id == currentChatUserId)) {
+            addMessageToChat(data);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+    });
+
+    // Auto-refresh messages every 3 seconds
+    function refreshMessages() {
+        if (currentChatUserId) {
+            fetch(`/get_messages/${currentChatUserId}`)
+                .then(response => response.json())
+                .then(messages => {
+                    // Clear current messages
+                    messagesDiv.innerHTML = '';
+                    // Add all messages
+                    messages.forEach(addMessageToChat);
+                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                });
+        }
+    }
+
+    // Start auto-refresh
+    const refreshInterval = setInterval(refreshMessages, 3000);
+
+    // Function to add message to chat
+    function addMessageToChat(message) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${message.sender_id == chatConfig.currentUserId ? 'sent' : 'received'}`;
+        messageDiv.innerHTML = `
+            <div class="message-content">
+                <p>${message.content}</p>
+                <span class="timestamp">${new Date(message.timestamp).toLocaleTimeString()}</span>
+            </div>
+        `;
+        messagesDiv.appendChild(messageDiv);
+    }
+
+    // Handle back button
+    document.querySelector('.back-button').addEventListener('click', () => {
+        currentChatUserId = null;
+        chatUsername.textContent = 'Select a chat';
+        chatStatus.textContent = 'No chat selected';
+        disableChat();
+        messagesDiv.innerHTML = `
+            <div class="no-messages-placeholder">
+                <i class="fas fa-comments"></i>
+                <p>Select a chat to start messaging</p>
+            </div>
+        `;
+    });
+
+    // Cleanup interval when page is unloaded
+    window.addEventListener('beforeunload', () => {
+        clearInterval(refreshInterval);
+    });
+
+    // Initially disable chat
+    disableChat();
+});
+</script>
+{% endblock %}
