@@ -6,8 +6,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import os
 from datetime import datetime
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'SATORU'  # Change this to a secure secret key
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+mysqlconnector://root:SATORU@localhost:3306/chat_app'
+app.config['SECRET_KEY'] = 'utDE3NCLl3j3X'  # Change this to a secure secret key
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+mysqlconnector://if0_39052653:utDE3NCLl3j3X@sql203.infinityfree.com/if0_39052653_chechat'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_POOL_SIZE'] = 100
 app.config['SQLALCHEMY_POOL_TIMEOUT'] = 30
