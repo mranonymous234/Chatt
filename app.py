@@ -4,7 +4,7 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
-import psycopg2
+from psycopg2-binary import psycopg2
 from datetime import datetime
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFybmJlZndjYmxhZ2NoaWhqa3BzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDgwOTIzMzEsImV4cCI6MjA2MzY2ODMzMX0.yW22yK420HFY-UVLTLjMzVHmVV2IhF7rpUnLhB4GNFk'  # Change this to a secure secret key
