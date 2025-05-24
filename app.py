@@ -154,8 +154,8 @@ if __name__ == '__main__':
         # Run the server
         socketio.run(
             app,
-            host='127.0.0.1',
-            port=5002,
+            host='0.0.0.0',
+            port=8080,
             debug=True,
             use_reloader=False,
             allow_unsafe_werkzeug=True
