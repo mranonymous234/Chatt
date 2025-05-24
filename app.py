@@ -4,10 +4,11 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
+import psycopg2
 from datetime import datetime
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'utDE3NCLl3j3X'  # Change this to a secure secret key
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+mysqlconnector://if0_39052653:utDE3NCLl3j3X@sql203.infinityfree.com/if0_39052653_chechat'
+app.config['SECRET_KEY'] = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFybmJlZndjYmxhZ2NoaWhqa3BzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDgwOTIzMzEsImV4cCI6MjA2MzY2ODMzMX0.yW22yK420HFY-UVLTLjMzVHmVV2IhF7rpUnLhB4GNFk'  # Change this to a secure secret key
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql+psycopg2://postgres:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFybmJlZndjYmxhZ2NoaWhqa3BzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDgwOTIzMzEsImV4cCI6MjA2MzY2ODMzMX0.yW22yK420HFY-UVLTLjMzVHmVV2IhF7rpUnLhB4GNFk@db.arnbefwcblagchihjkps.supabase.co:5432/postgres'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_POOL_SIZE'] = 100
 app.config['SQLALCHEMY_POOL_TIMEOUT'] = 30
