@@ -8,7 +8,7 @@ import psycopg
 from datetime import datetime
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'zFy4haF8rV2nNRGO'  # Change this to a secure secret key
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql+psycopg://postgres:zFy4haF8rV2nNRGO@aws-0-ap-south-1.pooler.supabase.com:6543/postgres?sslmode=require'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql+psycopg://postgres:zFy4haF8rV2nNRGO@db.arnbefwcblagchihjkps.supabase.co:5432/postgres?sslmode=require'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_POOL_SIZE'] = 100
 app.config['SQLALCHEMY_POOL_TIMEOUT'] = 30
