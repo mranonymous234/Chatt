@@ -148,7 +148,7 @@ def create_tables():
 
 if __name__ == '__main__':
     try:
-        print("Starting server on port 5002...")
+        print("Starting server...")
         # Create tables before starting the server
         create_tables()
         # Run the server
@@ -163,7 +163,6 @@ if __name__ == '__main__':
     except Exception as e:
         print(f"Error starting the server: {str(e)}")
         print("Please make sure:")
-        print("1. MySQL server is running")
+        print("1. PostgreSQL server is running")
         print("2. Database credentials are correct")
-        print("3. No other application is using port 5002")
         raise e
