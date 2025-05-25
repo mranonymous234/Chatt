@@ -20,22 +20,23 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 
 # Database Models
+
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(1024), nullable=False)  # Increased size to accommodate hash
+    password_hash = db.Column(db.String(1024), nullable=False)
     profile_pic = db.Column(db.String(200), default='default.jpg')
-    status = db.Column(db.String(80), default='Hey there! I am using WhatsApp')
+    status = db.Column(db.String(80), default='Hey there! I am using Whisper')
 
 class Message(db.Model):
     __tablename__ = 'message'
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.String(500), nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-    sender_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    receiver_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    sender_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    receiver_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     read = db.Column(db.Boolean, default=False)
 
 @login_manager.user_loader
