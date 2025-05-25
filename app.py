@@ -28,7 +28,11 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(1024), nullable=False)
     profile_pic = db.Column(db.String(200), default='default.jpg')
-    status = db.Column(db.String(80), default='Hey there! I am using Whisper')
+    status = db.Column(db.String(80), default='Hey there! I am using WhatsApp')
+
+    messages_sent = db.relationship('Message', foreign_keys='Message.sender_id', backref='sender', lazy='dynamic')
+    messages_received = db.relationship('Message', foreign_keys='Message.receiver_id', backref='receiver', lazy='dynamic')
+
 
 class Message(db.Model):
     __tablename__ = 'message'
@@ -38,7 +42,7 @@ class Message(db.Model):
     sender_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     receiver_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     read = db.Column(db.Boolean, default=False)
-
+    
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
