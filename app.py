@@ -6,8 +6,9 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import psycopg
 from datetime import datetime
+
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'zFy4haF8rV2nNRGO'  # Change this to a secure secret key
+app.config['SECRET_KEY'] = 'zFy4haF8rV2nNRGO'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql+psycopg://postgres:zFy4haF8rV2nNRGO@db.arnbefwcblagchihjkps.supabase.co:5432/postgres?sslmode=require'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_POOL_SIZE'] = 100
@@ -20,7 +21,6 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 
 # Database Models
-
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
@@ -30,9 +30,8 @@ class User(UserMixin, db.Model):
     profile_pic = db.Column(db.String(200), default='default.jpg')
     status = db.Column(db.String(80), default='Hey there! I am using WhatsApp')
 
-    messages_sent = db.relationship('Message', foreign_keys='Message.sender_id', backref='sender', lazy='dynamic')
-    messages_received = db.relationship('Message', foreign_keys='Message.receiver_id', backref='receiver', lazy='dynamic')
-
+    sent_messages = db.relationship('Message', backref='sender', foreign_keys='Message.sender_id', lazy=True)
+    received_messages = db.relationship('Message', backref='receiver', foreign_keys='Message.receiver_id', lazy=True)
 
 class Message(db.Model):
     __tablename__ = 'message'
@@ -42,10 +41,10 @@ class Message(db.Model):
     sender_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     receiver_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     read = db.Column(db.Boolean, default=False)
-    
+
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return db.session.get(User, int(user_id))  # Updated for SQLAlchemy 2.0
 
 # Routes
 @app.route('/')
@@ -103,6 +102,11 @@ def chat():
 @app.route('/get_messages/<user_id>')
 @login_required
 def get_messages(user_id):
+    try:
+        user_id = int(user_id)  # Fix: Convert user_id from string to int
+    except ValueError:
+        return jsonify({'error': 'Invalid user ID'}), 400
+
     messages = Message.query.filter(
         ((Message.sender_id == current_user.id) & (Message.receiver_id == user_id)) |
         ((Message.sender_id == user_id) & (Message.receiver_id == current_user.id))
@@ -154,9 +158,7 @@ def create_tables():
 if __name__ == '__main__':
     try:
         print("Starting server...")
-        # Create tables before starting the server
         create_tables()
-        # Run the server
         socketio.run(
             app,
             host='0.0.0.0',
