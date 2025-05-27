@@ -538,3 +538,75 @@ body {
         background-image: none;
     }
 }
+/* Brand Icon Styles */
+.brand-icon {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 1000;
+  transition: all 0.3s ease;
+}
+
+.brand-icon img {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  object-fit: contain;
+}
+
+.brand-icon span {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: white;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* Chat page specific */
+.chat-brand img {
+  width: 28px;
+  height: 28px;
+}
+
+/* Animation when clicked */
+.brand-icon:active {
+  transform: scale(0.95);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .brand-icon {
+    top: 15px;
+    left: 15px;
+  }
+  
+  .brand-icon img {
+    width: 28px;
+    height: 28px;
+  }
+  
+  .brand-icon span {
+    font-size: 1.1rem;
+  }
+  
+  .chat-brand {
+    display: none;
+  }
+}
+
+/* Special state for auth page */
+.auth-container .brand-icon {
+  top: 30px;
+  left: 30px;
+}
+
+.auth-container .brand-icon img {
+  width: 36px;
+  height: 36px;
+}
+
+.auth-container .brand-icon span {
+  font-size: 1.5rem;
+}
