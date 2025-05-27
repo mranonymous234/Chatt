@@ -1,7 +1,10 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1>Whisper</h1>
+<div class="brand-icon">
+  <img src="{{ url_for('static', filename='images/favicon.png' }} alt="App Logo">
+  <span>Whisper</span>
+</div>
 <div class="auth-container">
     <div class="auth-box">
         <h2>Register</h2>
