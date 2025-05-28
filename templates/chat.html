@@ -3,7 +3,7 @@
 {% block content %}
 {# Define reusable profile image macro #}
 {% macro profile_image(src, alt, class_name, id='') %}
-    <img src="{{ url_for('static', filename='images/default.jpg') }}" 
+    <img src="{{ src if src else url_for('static', filename='images/default.jpg') }}" 
          alt="{{ alt }}" 
          class="{{ class_name }}" 
          {% if id %}id="{{ id }}"{% endif %}>
@@ -31,6 +31,9 @@
                     <h4>{{ user.username }}</h4>
                     <p class="last-message">Click to start chatting</p>
                 </div>
+                <button class="call-btn" data-user-id="{{ user.id }}">
+                    <i class="fas fa-phone"></i>
+                </button>
             </div>
             {% endfor %}
         </div>
@@ -72,6 +75,147 @@
         </div>
     </div>
 </div>
+
+<!-- Call Screens -->
+<div id="call-screen" class="call-screen">
+    <div class="call-container">
+        <div class="call-header">
+            <h2 id="call-status">Calling...</h2>
+        </div>
+        <audio id="remote-audio" autoplay></audio>
+        <div class="call-controls">
+            <button id="end-call" class="call-btn end-call">
+                <i class="fas fa-phone-slash"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+<div id="incoming-call-modal" class="modal">
+    <div class="modal-content">
+        <img id="caller-pic" src="{{ url_for('static', filename='images/default.jpg') }}" alt="Caller" class="caller-pic">
+        <h3 id="caller-name">Caller Name</h3>
+        <p>Incoming call...</p>
+        <div class="call-buttons">
+            <button id="accept-call" class="call-btn accept-call">
+                <i class="fas fa-phone"></i>
+            </button>
+            <button id="decline-call" class="call-btn decline-call">
+                <i class="fas fa-phone-slash"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Call-related styles */
+.call-screen {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+}
+
+.call-container {
+    background-color: white;
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+    width: 300px;
+}
+
+.call-controls {
+    margin-top: 20px;
+}
+
+.call-btn {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: none;
+    margin: 0 10px;
+    font-size: 20px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.end-call {
+    background-color: #ff4444;
+    color: white;
+}
+
+.accept-call {
+    background-color: #00C851;
+    color: white;
+}
+
+.decline-call {
+    background-color: #ff4444;
+    color: white;
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    background-color: white;
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+}
+
+.caller-pic {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-bottom: 15px;
+}
+
+.call-buttons {
+    margin-top: 20px;
+}
+
+.user-item .call-btn {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 30px;
+    height: 30px;
+    font-size: 14px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+}
+
+.user-item .call-btn:hover {
+    background-color: #3e8e41;
+}
+
+/* Existing chat styles remain unchanged */
+</style>
 {% endblock %}
 
 {% block extra_js %}
@@ -92,12 +236,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatUsername = document.getElementById('chat-username');
     const chatStatus = document.getElementById('chat-status');
     const submitButton = messageForm.querySelector('button');
+    
+    // WebRTC variables
+    let peerConnection;
+    let localStream;
+    let currentCall = null;
+    const iceServers = {
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' }
+        ]
+    };
 
     // Enable input when chat is selected
     function enableChat() {
         messageInput.disabled = false;
         submitButton.disabled = false;
-        messageInput.focus();  // Auto-focus the input
+        messageInput.focus();
     }
 
     // Disable input when no chat is selected
@@ -117,19 +271,18 @@ document.addEventListener('DOMContentLoaded', () => {
             chatUsername.textContent = username;
             chatStatus.textContent = status;
             
-            // Enable chat input
-            enableChat();
+            // Update chat user pic
+            const userPic = userItem.querySelector('.user-pic').src;
+            document.getElementById('chat-user-pic').src = userPic;
             
-            // Clear messages
+            enableChat();
             messagesDiv.innerHTML = '';
             
-            // Join room
             socket.emit('join', {
                 sender_id: chatConfig.currentUserId,
                 receiver_id: userId
             });
             
-            // Load previous messages
             fetch(`/get_messages/${userId}`)
                 .then(response => response.json())
                 .then(messages => {
@@ -153,13 +306,12 @@ document.addEventListener('DOMContentLoaded', () => {
             
             socket.emit('message', messageData);
             messageInput.value = '';
-            messageInput.focus();  // Keep focus on input after sending
+            messageInput.focus();
         }
     });
 
     // Handle receiving messages
     socket.on('message', (data) => {
-        // Only add message if it's for the current chat
         if (currentChatUserId && 
             (data.sender_id == currentChatUserId || data.receiver_id == currentChatUserId)) {
             addMessageToChat(data);
@@ -167,25 +319,221 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Auto-refresh messages every 3 seconds
+    // Call functionality
+    document.querySelectorAll('.call-btn').forEach(btn => {
+        if (btn.dataset.userId) {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                startCall(btn.dataset.userId);
+            });
+        }
+    });
+
+    document.getElementById('accept-call').addEventListener('click', () => {
+        const callerId = document.getElementById('incoming-call-modal').dataset.callerId;
+        answerCall(callerId);
+        document.getElementById('incoming-call-modal').style.display = 'none';
+    });
+
+    document.getElementById('decline-call').addEventListener('click', () => {
+        const callerId = document.getElementById('incoming-call-modal').dataset.callerId;
+        declineCall(callerId);
+    });
+
+    document.getElementById('end-call').addEventListener('click', endCall);
+
+    // Call functions
+    async function startCall(userId) {
+        try {
+            currentCall = userId;
+            
+            // Get user media
+            localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            
+            // Create peer connection
+            peerConnection = new RTCPeerConnection(iceServers);
+            
+            // Add local stream to connection
+            localStream.getTracks().forEach(track => {
+                peerConnection.addTrack(track, localStream);
+            });
+            
+            // Handle ICE candidates
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    socket.emit('ice_candidate', {
+                        candidate: event.candidate,
+                        target_user_id: userId
+                    });
+                }
+            };
+            
+            // Handle remote stream
+            peerConnection.ontrack = (event) => {
+                const remoteAudio = document.getElementById('remote-audio');
+                remoteAudio.srcObject = event.streams[0];
+            };
+            
+            // Create offer
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+            
+            // Send call request
+            socket.emit('call', {
+                caller_id: chatConfig.currentUserId,
+                callee_id: userId
+            });
+            
+            // Update UI
+            document.getElementById('call-status').textContent = `Calling ${getUsername(userId)}...`;
+            showCallScreen(true);
+            
+        } catch (error) {
+            console.error('Error starting call:', error);
+            endCall();
+        }
+    }
+
+    function answerCall(callerId) {
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+            localStream = stream;
+            
+            peerConnection = new RTCPeerConnection(iceServers);
+            
+            // Add local stream to connection
+            localStream.getTracks().forEach(track => {
+                peerConnection.addTrack(track, localStream);
+            });
+            
+            // Handle ICE candidates
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    socket.emit('ice_candidate', {
+                        candidate: event.candidate,
+                        target_user_id: callerId
+                    });
+                }
+            };
+            
+            // Handle remote stream
+            peerConnection.ontrack = (event) => {
+                const remoteAudio = document.getElementById('remote-audio');
+                remoteAudio.srcObject = event.streams[0];
+            };
+            
+            // Create answer
+            peerConnection.createAnswer().then(answer => {
+                return peerConnection.setLocalDescription(answer);
+            }).then(() => {
+                socket.emit('answer_call', {
+                    caller_id: callerId,
+                    callee_id: chatConfig.currentUserId,
+                    accepted: true
+                });
+                
+                document.getElementById('call-status').textContent = `In call with ${getUsername(callerId)}`;
+                showCallScreen(true);
+            }).catch(error => {
+                console.error('Error answering call:', error);
+                endCall();
+            });
+        });
+    }
+
+    function declineCall(callerId) {
+        socket.emit('answer_call', {
+            caller_id: callerId,
+            callee_id: chatConfig.currentUserId,
+            accepted: false
+        });
+        document.getElementById('incoming-call-modal').style.display = 'none';
+    }
+
+    function endCall() {
+        if (peerConnection) {
+            peerConnection.close();
+            peerConnection = null;
+        }
+        
+        if (localStream) {
+            localStream.getTracks().forEach(track => track.stop());
+            localStream = null;
+        }
+        
+        if (currentCall) {
+            socket.emit('end_call', { target_user_id: currentCall });
+            currentCall = null;
+        }
+        
+        showCallScreen(false);
+    }
+
+    function showCallScreen(show) {
+        const callScreen = document.getElementById('call-screen');
+        if (show) {
+            callScreen.style.display = 'flex';
+        } else {
+            callScreen.style.display = 'none';
+            const remoteAudio = document.getElementById('remote-audio');
+            remoteAudio.srcObject = null;
+        }
+    }
+
+    function getUsername(userId) {
+        const userItem = document.querySelector(`.user-item[data-user-id="${userId}"]`);
+        return userItem ? userItem.querySelector('h4').textContent : 'User';
+    }
+
+    // Socket listeners for calls
+    socket.on('incoming_call', (data) => {
+        const callModal = document.getElementById('incoming-call-modal');
+        callModal.dataset.callerId = data.caller_id;
+        document.getElementById('caller-name').textContent = data.caller_name;
+        document.getElementById('caller-pic').src = data.caller_pic || chatConfig.defaultProfilePic;
+        callModal.style.display = 'flex';
+        
+        setTimeout(() => {
+            if (callModal.style.display === 'flex') {
+                declineCall(data.caller_id);
+            }
+        }, 30000);
+    });
+
+    socket.on('call_accepted', (data) => {
+        document.getElementById('call-status').textContent = `In call with ${data.callee_name}`;
+    });
+
+    socket.on('call_rejected', (data) => {
+        showCallScreen(false);
+        alert(`Call rejected: ${data.reason}`);
+    });
+
+    socket.on('ice_candidate', (data) => {
+        if (peerConnection) {
+            peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+        }
+    });
+
+    socket.on('call_ended', () => {
+        alert('Call ended by other party');
+        endCall();
+    });
+
+    // Auto-refresh messages
     function refreshMessages() {
         if (currentChatUserId) {
             fetch(`/get_messages/${currentChatUserId}`)
                 .then(response => response.json())
                 .then(messages => {
-                    // Clear current messages
                     messagesDiv.innerHTML = '';
-                    // Add all messages
                     messages.forEach(addMessageToChat);
                     messagesDiv.scrollTop = messagesDiv.scrollHeight;
                 });
         }
     }
 
-    // Start auto-refresh
     const refreshInterval = setInterval(refreshMessages, 3000);
 
-    // Function to add message to chat
     function addMessageToChat(message) {
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${message.sender_id == chatConfig.currentUserId ? 'sent' : 'received'}`;
@@ -198,7 +546,6 @@ document.addEventListener('DOMContentLoaded', () => {
         messagesDiv.appendChild(messageDiv);
     }
 
-    // Handle back button
     document.querySelector('.back-button').addEventListener('click', () => {
         currentChatUserId = null;
         chatUsername.textContent = 'Select a chat';
@@ -212,12 +559,10 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
     });
 
-    // Cleanup interval when page is unloaded
     window.addEventListener('beforeunload', () => {
         clearInterval(refreshInterval);
     });
 
-    // Initially disable chat
     disableChat();
 });
 </script>
