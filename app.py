@@ -151,6 +151,59 @@ def on_join(data):
     room = f"chat_{min(sender_id, receiver_id)}_{max(sender_id, receiver_id)}"
     join_room(room)
 
+# Add these new socket event handlers to your existing app.py
+
+@socketio.on('call')
+def handle_call(data):
+    """Handle incoming call request"""
+    caller_id = data['caller_id']
+    callee_id = data['callee_id']
+    
+    callee = User.query.get(callee_id)
+    if callee:
+        emit('incoming_call', {
+            'caller_id': caller_id,
+            'caller_name': User.query.get(caller_id).username,
+            'caller_pic': User.query.get(caller_id).profile_pic
+        }, room=str(callee_id))
+    else:
+        emit('call_rejected', {'reason': 'User not found'}, room=str(caller_id))
+
+@socketio.on('answer_call')
+def handle_answer_call(data):
+    """Handle call answer (accept/reject)"""
+    callee_id = data['callee_id']
+    caller_id = data['caller_id']
+    accepted = data['accepted']
+    
+    if accepted:
+        emit('call_accepted', {
+            'callee_id': callee_id,
+            'callee_name': User.query.get(callee_id).username
+        }, room=str(caller_id))
+    else:
+        emit('call_rejected', {'reason': 'User declined'}, room=str(caller_id))
+
+@socketio.on('ice_candidate')
+def handle_ice_candidate(data):
+    """Handle ICE candidate exchange"""
+    target_user_id = data['target_user_id']
+    emit('ice_candidate', {
+        'candidate': data['candidate']
+    }, room=str(target_user_id))
+
+@socketio.on('end_call')
+def handle_end_call(data):
+    """Handle call termination"""
+    target_user_id = data['target_user_id']
+    emit('call_ended', {}, room=str(target_user_id))
+
+@socketio.on('join_call_room')
+def handle_join_call_room(data):
+    """Join a user to their personal call room"""
+    user_id = data['user_id']
+    join_room(str(user_id))
+
 def create_tables():
     with app.app_context():
         db.create_all()
