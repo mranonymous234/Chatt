@@ -63,6 +63,10 @@ def load_user(user_id):
     return db.session.get(User, int(user_id))  # Updated for SQLAlchemy 2.0
 
 # Routes
+@app.route('/firebase-messaging-sw.js')
+def service_worker():
+    return app.send_static_file('firebase-messaging-sw.js')
+    
 @app.route('/')
 def index():
     if current_user.is_authenticated:
