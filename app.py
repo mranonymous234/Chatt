@@ -9,24 +9,20 @@ from datetime import datetime
 import firebase_admin
 from firebase_admin import credentials, messaging
 
-# Initialize once globally (do not repeat this)
-cred = credentials.Certificate("firebase-key.json")
+cred = credentials.Certificate("/firebase-key.json")
 firebase_admin.initialize_app(cred)
 
-def send_push_notification(token, title, body):
+def send_fcm_message(token, title, body):
     message = messaging.Message(
         notification=messaging.Notification(
             title=title,
-            body=body,
+            body=body
         ),
-        token=token,
+        token=token
     )
-
-    try:
-        response = messaging.send(message)
-        print(f"Successfully sent message: {response}")
-    except Exception as e:
-        print(f"Failed to send notification: {str(e)}")
+    response = messaging.send(message)
+    print('Successfully sent message:', response)
+    
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'zFy4haF8rV2nNRGO'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql+psycopg://postgres:zFy4haF8rV2nNRGO@db.arnbefwcblagchihjkps.supabase.co:5432/postgres?sslmode=require'
