@@ -9,7 +9,9 @@ from datetime import datetime
 import firebase_admin
 from firebase_admin import credentials, messaging
 
-cred = credentials.Certificate("/firebase-key.json")
+import json
+firebase_key_json = os.environ.get("FIREBASE_KEY_JSON")
+cred = credentials.Certificate(json.loads(firebase_key_json))
 firebase_admin.initialize_app(cred)
 
 def send_fcm_message(token, title, body):
