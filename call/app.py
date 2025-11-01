@@ -1,26 +1,37 @@
-// Register current user
-const username = prompt("Enter your username:");
-socket.emit('register', {username});
+from flask import Flask, render_template, request
+from flask_socketio import SocketIO, join_room, leave_room, emit
 
-// Call a user
-async function callUser(targetUsername) {
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    socket.emit('call-user', { from: username, target: targetUsername, offer });
-}
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'secret!'
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
-// Handle incoming call
-socket.on('incoming-call', async (data) => {
-    const accept = confirm(`Incoming call from ${data.from}. Accept?`);
-    if (!accept) return;
-    await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    // Send back answer to caller
-    socket.emit('answer-call', { target_sid: data.from, answer });
-});
+# Keep track of users: {username: sid}
+users = {}
 
-// Handle call answer
-socket.on('call-answered', async (data) => {
-    await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
-});
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@socketio.on('register')
+def handle_register(data):
+    username = data['username']
+    users[username] = request.sid  # save socket id
+
+@socketio.on('call-user')
+def handle_call(data):
+    target = data['target']  # target username
+    if target in users:
+        emit('incoming-call', {'from': data['from'], 'offer': data['offer']}, room=users[target])
+
+@socketio.on('answer-call')
+def handle_answer(data):
+    target_sid = data['target_sid']  # sid of caller
+    emit('call-answered', {'answer': data['answer']}, room=target_sid)
+
+@socketio.on('ice-candidate')
+def handle_ice(data):
+    target_sid = data['target_sid']
+    emit('ice-candidate', {'candidate': data['candidate']}, room=target_sid)
+
+if __name__ == '__main__':
+    socketio.run(app, host='0.0.0.0', port=5000)
