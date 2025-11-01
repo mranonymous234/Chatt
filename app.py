@@ -6,13 +6,6 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import psycopg
 from datetime import datetime
-import firebase_admin
-from firebase_admin import credentials, messaging
-
-import json
-firebase_key_json = os.environ.get("FIREBASE_KEY_JSON")
-cred = credentials.Certificate(json.loads(firebase_key_json))
-firebase_admin.initialize_app(cred)
 
 def send_fcm_message(token, title, body):
     message = messaging.Message(
