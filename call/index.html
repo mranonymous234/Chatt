@@ -1,21 +1,181 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Video Call</title>
-    <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chatt Video Call</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: #121212;
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+  }
+  video {
+    width: 300px;
+    height: 200px;
+    background: #000;
+    margin: 10px;
+    border-radius: 10px;
+    object-fit: cover;
+  }
+  #buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  button {
+    padding: 10px 15px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    background: #1e1e1e;
+    color: #fff;
+    font-weight: bold;
+  }
+  button:hover { background: #333; }
+</style>
 </head>
 <body>
-    <h1>Video Call Demo</h1>
-    <div class="video-container">
-        <video id="localVideo" autoplay muted></video>
-        <video id="remoteVideo" autoplay></video>
-    </div>
-    <div class="buttons">
-        <button id="startButton">Start Call</button>
-        <button id="hangupButton" disabled>Hang Up</button>
-    </div>
 
-    <script src="call.js"></script>
+<h1>Chatt Video Call</h1>
+
+<div>
+  <video id="localVideo" autoplay muted></video>
+  <video id="remoteVideo" autoplay></video>
+</div>
+
+<div id="buttons">
+  <button id="callBtn">Call</button>
+  <button id="muteBtn">Mute</button>
+  <button id="videoBtn">Video Off</button>
+  <button id="switchCameraBtn">Switch Camera</button>
+  <button id="declineBtn">Decline</button>
+</div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+const socket = io();
+
+// Prompt username
+const username = prompt("Enter your username:");
+socket.emit('register', {username});
+
+let pc;
+let localStream;
+
+// Access camera and microphone
+async function initMedia() {
+  localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+  document.getElementById('localVideo').srcObject = localStream;
+}
+
+// Create peer connection
+function createPeerConnection() {
+  pc = new RTCPeerConnection();
+
+  // Add local tracks
+  localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+  // Remote stream
+  const remoteVideo = document.getElementById('remoteVideo');
+  pc.ontrack = (event) => {
+    remoteVideo.srcObject = event.streams[0];
+  };
+
+  // ICE candidates
+  pc.onicecandidate = (event) => {
+    if (event.candidate) {
+      socket.emit('ice-candidate', { candidate: event.candidate, target_sid: targetSid });
+    }
+  };
+}
+
+// Call a specific user
+let targetUsername;
+let targetSid;
+
+document.getElementById('callBtn').onclick = async () => {
+  targetUsername = prompt("Enter username to call:");
+  createPeerConnection();
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+
+  socket.emit('call-user', { from: username, target: targetUsername, offer });
+};
+
+// Incoming call
+socket.on('incoming-call', async (data) => {
+  const accept = confirm(`Incoming call from ${data.from}. Accept?`);
+  if (!accept) return;
+
+  targetSid = data.from; // store caller sid
+  createPeerConnection();
+
+  await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+
+  socket.emit('answer-call', { target_sid: data.from, answer });
+});
+
+// Handle call answer
+socket.on('call-answered', async (data) => {
+  await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+});
+
+// ICE candidates
+socket.on('ice-candidate', async (data) => {
+  if (pc) {
+    await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+  }
+});
+
+// Buttons functionality
+document.getElementById('muteBtn').onclick = () => {
+  const audioTrack = localStream.getAudioTracks()[0];
+  audioTrack.enabled = !audioTrack.enabled;
+  document.getElementById('muteBtn').textContent = audioTrack.enabled ? "Mute" : "Unmute";
+};
+
+document.getElementById('videoBtn').onclick = () => {
+  const videoTrack = localStream.getVideoTracks()[0];
+  videoTrack.enabled = !videoTrack.enabled;
+  document.getElementById('videoBtn').textContent = videoTrack.enabled ? "Video Off" : "Video On";
+};
+
+document.getElementById('switchCameraBtn').onclick = async () => {
+  const videoTrack = localStream.getVideoTracks()[0];
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const videoDevices = devices.filter(d => d.kind === 'videoinput');
+  const currentIndex = videoDevices.findIndex(d => d.deviceId === videoTrack.getSettings().deviceId);
+  const nextDevice = videoDevices[(currentIndex + 1) % videoDevices.length];
+
+  const newStream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: nextDevice.deviceId }, audio: true });
+  const newTrack = newStream.getVideoTracks()[0];
+
+  localStream.removeTrack(videoTrack);
+  localStream.addTrack(newTrack);
+
+  const sender = pc.getSenders().find(s => s.track.kind === 'video');
+  sender.replaceTrack(newTrack);
+
+  document.getElementById('localVideo').srcObject = localStream;
+};
+
+document.getElementById('declineBtn').onclick = () => {
+  if (pc) {
+    pc.close();
+    pc = null;
+  }
+  document.getElementById('remoteVideo').srcObject = null;
+};
+
+initMedia();
+</script>
 </body>
 </html>
