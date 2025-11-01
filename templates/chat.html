@@ -376,141 +376,126 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('end-call').addEventListener('click', endCall);
 
     // Call functions
-    async function startCall(userId) {
-        try {
-            currentCall = userId;
-            
-            // Get user media
-            localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            
-            // Create peer connection
-            peerConnection = new RTCPeerConnection(iceServers);
-            
-            // Add local stream to connection
-            localStream.getTracks().forEach(track => {
-                peerConnection.addTrack(track, localStream);
-            });
-            
-            // Handle ICE candidates
-            peerConnection.onicecandidate = (event) => {
-                if (event.candidate) {
-                    socket.emit('ice_candidate', {
-                        candidate: event.candidate,
-                        target_user_id: userId
-                    });
-                }
-            };
-            
-            // Handle remote stream
-            peerConnection.ontrack = (event) => {
-                const remoteAudio = document.getElementById('remote-audio');
-                remoteAudio.srcObject = event.streams[0];
-            };
-            
-            // Create offer
-            const offer = await peerConnection.createOffer();
-            await peerConnection.setLocalDescription(offer);
-            
-            // Send call request
-            socket.emit('call', {
-                caller_id: chatConfig.currentUserId,
-                callee_id: userId
-            });
-            
-            // Update UI
-            document.getElementById('call-status').textContent = `Calling ${getUsername(userId)}...`;
-            showCallScreen(true);
-            
-        } catch (error) {
-            console.error('Error starting call:', error);
-            endCall();
-        }
-    }
-
-    function answerCall(callerId) {
-        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-            localStream = stream;
-            
-            peerConnection = new RTCPeerConnection(iceServers);
-            
-            // Add local stream to connection
-            localStream.getTracks().forEach(track => {
-                peerConnection.addTrack(track, localStream);
-            });
-            
-            // Handle ICE candidates
-            peerConnection.onicecandidate = (event) => {
-                if (event.candidate) {
-                    socket.emit('ice_candidate', {
-                        candidate: event.candidate,
-                        target_user_id: callerId
-                    });
-                }
-            };
-            
-            // Handle remote stream
-            peerConnection.ontrack = (event) => {
-                const remoteAudio = document.getElementById('remote-audio');
-                remoteAudio.srcObject = event.streams[0];
-            };
-            
-            // Create answer
-            peerConnection.createAnswer().then(answer => {
-                return peerConnection.setLocalDescription(answer);
-            }).then(() => {
-                socket.emit('answer_call', {
-                    caller_id: callerId,
-                    callee_id: chatConfig.currentUserId,
-                    accepted: true
-                });
-                
-                document.getElementById('call-status').textContent = `In call with ${getUsername(callerId)}`;
-                showCallScreen(true);
-            }).catch(error => {
-                console.error('Error answering call:', error);
-                endCall();
-            });
+    a// Call functionality
+document.querySelectorAll('.call-btn').forEach(btn => {
+    if (btn.dataset.userId) {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent selecting user
+            startCall(btn.dataset.userId);
         });
     }
+});
 
-    function declineCall(callerId) {
-        socket.emit('answer_call', {
-            caller_id: callerId,
-            callee_id: chatConfig.currentUserId,
-            accepted: false
-        });
-        document.getElementById('incoming-call-modal').style.display = 'none';
-    }
+document.getElementById('accept-call').addEventListener('click', () => {
+    const callerId = document.getElementById('incoming-call-modal').dataset.callerId;
+    answerCall(callerId);
+    document.getElementById('incoming-call-modal').style.display = 'none';
+});
 
-    function endCall() {
-        if (peerConnection) {
-            peerConnection.close();
-            peerConnection = null;
-        }
-        
-        if (localStream) {
-            localStream.getTracks().forEach(track => track.stop());
-            localStream = null;
-        }
-        
-        if (currentCall) {
-            socket.emit('end_call', { target_user_id: currentCall });
-            currentCall = null;
-        }
-        
-        showCallScreen(false);
-    }
+document.getElementById('decline-call').addEventListener('click', () => {
+    const callerId = document.getElementById('incoming-call-modal').dataset.callerId;
+    declineCall(callerId);
+});
 
-    function showCallScreen(show) {
-        const callScreen = document.getElementById('call-screen');
-        if (show) {
-            callScreen.style.display = 'flex';
-        } else {
-            callScreen.style.display = 'none';
-            const remoteAudio = document.getElementById('remote-audio');
-            remoteAudio.srcObject = null;
-        }
+document.getElementById('end-call').addEventListener('click', endCall);
+
+let peerConnection;
+let localStream;
+let currentCall = null;
+
+const iceServers = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+async function startCall(userId) {
+    try {
+        currentCall = userId;
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+        peerConnection = new RTCPeerConnection(iceServers);
+        localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+        peerConnection.onicecandidate = event => {
+            if (event.candidate) {
+                socket.emit('ice_candidate', { candidate: event.candidate, target_user_id: userId });
+            }
+        };
+
+        peerConnection.ontrack = event => {
+            document.getElementById('remote-audio').srcObject = event.streams[0];
+        };
+
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+
+        socket.emit('call', { caller_id: chatConfig.currentUserId, callee_id: userId, offer });
+
+        document.getElementById('call-status').textContent = `Calling ${getUsername(userId)}...`;
+        showCallScreen(true);
+    } catch (err) {
+        console.error(err);
+        endCall();
     }
+}
+
+function answerCall(callerId) {
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(async stream => {
+        localStream = stream;
+        peerConnection = new RTCPeerConnection(iceServers);
+        localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+        peerConnection.onicecandidate = event => {
+            if (event.candidate) {
+                socket.emit('ice_candidate', { candidate: event.candidate, target_user_id: callerId });
+            }
+        };
+
+        peerConnection.ontrack = event => {
+            document.getElementById('remote-audio').srcObject = event.streams[0];
+        };
+
+        // Set the remote description (offer from caller)
+        const offer = window.incomingOffer; // you should store incoming offer from socket
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+
+        socket.emit('answer_call', { caller_id: callerId, callee_id: chatConfig.currentUserId, answer });
+
+        document.getElementById('call-status').textContent = `In call with ${getUsername(callerId)}`;
+        showCallScreen(true);
+    }).catch(err => {
+        console.error(err);
+        endCall();
+    });
+}
+
+function declineCall(callerId) {
+    socket.emit('answer_call', { caller_id: callerId, callee_id: chatConfig.currentUserId, accepted: false });
+    document.getElementById('incoming-call-modal').style.display = 'none';
+}
+
+function endCall() {
+    if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+    }
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+    }
+    if (currentCall) {
+        socket.emit('end_call', { target_user_id: currentCall });
+        currentCall = null;
+    }
+    showCallScreen(false);
+}
+
+function showCallScreen(show) {
+    const callScreen = document.getElementById('call-screen');
+    callScreen.style.display = show ? 'flex' : 'none';
+    if (!show) document.getElementById('remote-audio').srcObject = null;
+}
+
 
     function getUsername(userId) {
         const userItem = document.querySelector(`.user-item[data-user-id="${userId}"]`);
