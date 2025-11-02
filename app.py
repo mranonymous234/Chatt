@@ -3,35 +3,23 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from werkzeug.security import generate_password_hash, check_password_hash
-import os
-import psycopg
 from datetime import datetime
 
-def send_fcm_message(token, title, body):
-    message = messaging.Message(
-        notification=messaging.Notification(
-            title=title,
-            body=body
-        ),
-        token=token
-    )
-    response = messaging.send(message)
-    print('Successfully sent message:', response)
-    
+# ----------------- App & DB Setup -----------------
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'zFy4haF8rV2nNRGO'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql+psycopg://postgres:zFy4haF8rV2nNRGO@db.arnbefwcblagchihjkps.supabase.co:5432/postgres?sslmode=require'
+app.config['SECRET_KEY'] = 'zFy4haF8rV2nNRGO'  # Hardcoded secret key
+app.config['SQLALCHEMY_DATABASE_URI'] = (
+    'postgresql+psycopg://postgres:'
+    'zFy4haF8rV2nNRGO@db.arnbefwcblagchihjkps.supabase.co:5432/postgres?sslmode=require'
+)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SQLALCHEMY_POOL_SIZE'] = 100
-app.config['SQLALCHEMY_POOL_TIMEOUT'] = 30
 
 db = SQLAlchemy(app)
-socketio = SocketIO(app, async_mode='threading', cors_allowed_origins="*")
-login_manager = LoginManager()
-login_manager.init_app(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
+login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
-# Database Models
+# ----------------- Models -----------------
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
@@ -41,13 +29,10 @@ class User(UserMixin, db.Model):
     profile_pic = db.Column(db.String(200), default='default.jpg')
     status = db.Column(db.String(80), default='Hey there! I am using WhatsApp')
 
-    sent_messages = db.relationship('Message', backref='sender', foreign_keys='Message.sender_id', lazy=True)
-    received_messages = db.relationship('Message', backref='receiver', foreign_keys='Message.receiver_id', lazy=True)
-
 class Message(db.Model):
     __tablename__ = 'message'
     id = db.Column(db.Integer, primary_key=True)
-    content = db.Column(db.String(500), nullable=False)
+    content = db.Column(db.String(1000), nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
     sender_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     receiver_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -55,13 +40,9 @@ class Message(db.Model):
 
 @login_manager.user_loader
 def load_user(user_id):
-    return db.session.get(User, int(user_id))  # Updated for SQLAlchemy 2.0
+    return db.session.get(User, int(user_id))
 
-# Routes
-@app.route('/firebase-messaging-sw.js')
-def service_worker():
-    return app.send_static_file('firebase-messaging-sw.js')
-    
+# ----------------- Routes -----------------
 @app.route('/')
 def index():
     if current_user.is_authenticated:
@@ -74,7 +55,6 @@ def login():
         username = request.form.get('username')
         password = request.form.get('password')
         user = User.query.filter_by(username=username).first()
-        
         if user and check_password_hash(user.password_hash, password):
             login_user(user)
             return redirect(url_for('chat'))
@@ -87,23 +67,15 @@ def register():
         username = request.form.get('username')
         email = request.form.get('email')
         password = request.form.get('password')
-        
         if User.query.filter_by(username=username).first():
             flash('Username already exists')
             return redirect(url_for('register'))
-            
         if User.query.filter_by(email=email).first():
             flash('Email already registered')
             return redirect(url_for('register'))
-            
-        user = User(
-            username=username,
-            email=email,
-            password_hash=generate_password_hash(password)
-        )
+        user = User(username=username, email=email, password_hash=generate_password_hash(password))
         db.session.add(user)
         db.session.commit()
-        
         flash('Registration successful! Please login.')
         return redirect(url_for('login'))
     return render_template('register.html')
@@ -112,27 +84,30 @@ def register():
 @login_required
 def chat():
     users = User.query.filter(User.id != current_user.id).all()
-    return render_template('chat.html', users=users)
+    return render_template('chat.html', users=users, current_user=current_user)
 
-@app.route('/get_messages/<user_id>')
+@app.route('/get_messages/<int:user_id>')
 @login_required
 def get_messages(user_id):
-    try:
-        user_id = int(user_id)  # Fix: Convert user_id from string to int
-    except ValueError:
-        return jsonify({'error': 'Invalid user ID'}), 400
-
     messages = Message.query.filter(
         ((Message.sender_id == current_user.id) & (Message.receiver_id == user_id)) |
         ((Message.sender_id == user_id) & (Message.receiver_id == current_user.id))
     ).order_by(Message.timestamp).all()
-    
     return jsonify([{
-        'sender_id': msg.sender_id,
-        'receiver_id': msg.receiver_id,
-        'content': msg.content,
-        'timestamp': msg.timestamp.isoformat()
-    } for msg in messages])
+        'id': m.id,
+        'content': m.content,
+        'sender_id': m.sender_id,
+        'receiver_id': m.receiver_id,
+        'timestamp': m.timestamp.isoformat()
+    } for m in messages])
+
+@app.route('/get_user_id/<username>')
+@login_required
+def get_user_id(username):
+    u = User.query.filter_by(username=username).first()
+    if not u:
+        return jsonify({'error': 'User not found'}), 404
+    return jsonify({'id': u.id})
 
 @app.route('/logout')
 @login_required
@@ -140,104 +115,91 @@ def logout():
     logout_user()
     return redirect(url_for('login'))
 
-# Socket events
-@socketio.on('message')
-def handle_message(data):
-    message = Message(
-        content=data['content'],
-        sender_id=data['sender_id'],
-        receiver_id=data['receiver_id']
-    )
-    db.session.add(message)
-    db.session.commit()
-    
-    room = f"chat_{min(data['sender_id'], data['receiver_id'])}_{max(data['sender_id'], data['receiver_id'])}"
-    emit('message', {
-        'content': message.content,
-        'sender_id': message.sender_id,
-        'receiver_id': message.receiver_id,
-        'timestamp': message.timestamp.isoformat()
-    }, room=room)
+# ----------------- Socket.IO -----------------
+@socketio.on('join_user_room')
+def join_user_room(data):
+    user_id = str(data.get('user_id'))
+    join_room(user_id)
 
-@socketio.on('join')
-def on_join(data):
-    sender_id = data['sender_id']
-    receiver_id = data['receiver_id']
-    room = f"chat_{min(sender_id, receiver_id)}_{max(sender_id, receiver_id)}"
+@socketio.on('join_chat_room')
+def join_chat_room(data):
+    a = int(data['user_a'])
+    b = int(data['user_b'])
+    room = f"chat_{min(a,b)}_{max(a,b)}"
     join_room(room)
 
-# Add these new socket event handlers to your existing app.py
+@socketio.on('message')
+def handle_message(data):
+    content = data.get('content')
+    sender_id = int(data.get('sender_id'))
+    receiver_id = int(data.get('receiver_id'))
+    if not content:
+        return
+    msg = Message(content=content, sender_id=sender_id, receiver_id=receiver_id)
+    db.session.add(msg)
+    db.session.commit()
+    room = f"chat_{min(sender_id, receiver_id)}_{max(sender_id, receiver_id)}"
+    emit('message', {
+        'id': msg.id,
+        'content': msg.content,
+        'sender_id': msg.sender_id,
+        'receiver_id': msg.receiver_id,
+        'timestamp': msg.timestamp.isoformat()
+    }, room=room)
 
-@socketio.on('call')
-def handle_call(data):
-    """Handle incoming call request"""
-    caller_id = data['caller_id']
-    callee_id = data['callee_id']
-    
-    callee = User.query.get(callee_id)
+# ----------------- Call Signalling -----------------
+@socketio.on('call_user')
+def call_user(data):
+    caller_id = int(data.get('caller_id'))
+    callee_id = int(data.get('callee_id'))
+    callee = db.session.get(User, callee_id)
     if callee:
         emit('incoming_call', {
             'caller_id': caller_id,
-            'caller_name': User.query.get(caller_id).username,
-            'caller_pic': User.query.get(caller_id).profile_pic
+            'caller_name': db.session.get(User, caller_id).username
         }, room=str(callee_id))
     else:
-        emit('call_rejected', {'reason': 'User not found'}, room=str(caller_id))
+        emit('call_error', {'error': 'User not found'}, room=str(caller_id))
 
 @socketio.on('answer_call')
-def handle_answer_call(data):
-    """Handle call answer (accept/reject)"""
-    callee_id = data['callee_id']
-    caller_id = data['caller_id']
-    accepted = data['accepted']
-    
+def answer_call(data):
+    callee_id = int(data.get('callee_id'))
+    caller_id = int(data.get('caller_id'))
+    accepted = bool(data.get('accepted'))
     if accepted:
         emit('call_accepted', {
             'callee_id': callee_id,
-            'callee_name': User.query.get(callee_id).username
+            'callee_name': db.session.get(User, callee_id).username
         }, room=str(caller_id))
     else:
         emit('call_rejected', {'reason': 'User declined'}, room=str(caller_id))
 
+@socketio.on('offer')
+def forward_offer(data):
+    target_user_id = str(data.get('target_user_id'))
+    emit('offer', {'offer': data.get('offer'), 'from': data.get('from')}, room=target_user_id)
+
+@socketio.on('answer')
+def forward_answer(data):
+    target_user_id = str(data.get('target_user_id'))
+    emit('answer', {'answer': data.get('answer'), 'from': data.get('from')}, room=target_user_id)
+
 @socketio.on('ice_candidate')
-def handle_ice_candidate(data):
-    """Handle ICE candidate exchange"""
-    target_user_id = data['target_user_id']
-    emit('ice_candidate', {
-        'candidate': data['candidate']
-    }, room=str(target_user_id))
+def forward_ice(data):
+    target_user_id = str(data.get('target_user_id'))
+    emit('ice_candidate', {'candidate': data.get('candidate')}, room=target_user_id)
 
 @socketio.on('end_call')
-def handle_end_call(data):
-    """Handle call termination"""
-    target_user_id = data['target_user_id']
-    emit('call_ended', {}, room=str(target_user_id))
+def forward_end_call(data):
+    target_user_id = str(data.get('target_user_id'))
+    emit('call_ended', {}, room=target_user_id)
 
-@socketio.on('join_call_room')
-def handle_join_call_room(data):
-    """Join a user to their personal call room"""
-    user_id = data['user_id']
-    join_room(str(user_id))
-
+# ----------------- DB Init -----------------
 def create_tables():
     with app.app_context():
         db.create_all()
 
+# ----------------- Run -----------------
 if __name__ == '__main__':
-    try:
-        print("Starting server...")
-        create_tables()
-        socketio.run(
-            app,
-            host='0.0.0.0',
-            port=8080,
-            debug=True,
-            use_reloader=False,
-            allow_unsafe_werkzeug=True
-        )
-    except Exception as e:
-        print(f"Error starting the server: {str(e)}")
-        print("Please make sure:")
-        print("1. PostgreSQL server is running")
-        print("2. Database credentials are correct")
-        raise e
+    create_tables()
+    socketio.run(app, host='0.0.0.0', port=8080, debug=True)
