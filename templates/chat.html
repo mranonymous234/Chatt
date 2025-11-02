@@ -1,19 +1,11 @@
 {% extends "base.html" %}
 
 {% block content %}
-{# Define reusable profile image macro #}
-{% macro profile_image(src, alt, class_name, id='') %}
-    <img src="{{ src if src else url_for('static', filename='images/default.jpg') }}" 
-         alt="{{ alt }}" 
-         class="{{ class_name }}" 
-         {% if id %}id="{{ id }}"{% endif %}>
-{% endmacro %}
-
 <div class="chat-container">
-    <!-- Sidebar with user list -->
+    <!-- Sidebar -->
     <div class="sidebar">
         <div class="user-profile">
-            {{ profile_image(current_user.profile_pic, 'Profile', 'profile-pic') }}
+            <img src="{{ current_user.profile_pic or url_for('static', filename='images/default.jpg') }}" alt="Profile" class="profile-pic">
             <div class="user-info">
                 <h3>{{ current_user.username }}</h3>
                 <p class="status">{{ current_user.status }}</p>
@@ -22,31 +14,27 @@
                 <i class="fas fa-sign-out-alt"></i>
             </a>
         </div>
-        
+
         <div class="user-list">
             {% for user in users %}
             <div class="user-item" data-user-id="{{ user.id }}">
-                {{ profile_image(user.profile_pic, user.username, 'user-pic') }}
+                <img src="{{ user.profile_pic or url_for('static', filename='images/default.jpg') }}" class="user-pic">
                 <div class="user-info">
                     <h4>{{ user.username }}</h4>
                     <p class="last-message">Click to start chatting</p>
                 </div>
-                <button class="call-btn" data-user-id="{{ user.id }}">
-                    <i class="fas fa-phone"></i>
-                </button>
+                <button class="call-btn" data-user-id="{{ user.id }}"><i class="fas fa-phone"></i></button>
             </div>
             {% endfor %}
         </div>
     </div>
 
-    <!-- Chat area -->
+    <!-- Chat Area -->
     <div class="chat-area">
         <div class="chat-header">
             <div class="chat-user-info">
-                <div class="back-button">
-                    <i class="fas fa-arrow-left"></i>
-                </div>
-                {{ profile_image('', '', 'user-pic', 'chat-user-pic') }}
+                <div class="back-button"><i class="fas fa-arrow-left"></i></div>
+                <img src="{{ url_for('static', filename='images/default.jpg') }}" class="user-pic" id="chat-user-pic">
                 <div class="user-details">
                     <h3 id="chat-username">Select a chat</h3>
                     <p class="status" id="chat-status">No chat selected</p>
@@ -63,20 +51,14 @@
 
         <div class="message-input">
             <form id="message-form">
-                <input type="text" 
-                       id="message-text" 
-                       placeholder="Type a message..." 
-                       autocomplete="off"
-                       disabled>
-                <button type="submit" disabled>
-                    <i class="fas fa-paper-plane"></i>
-                </button>
+                <input type="text" id="message-text" placeholder="Type a message..." disabled>
+                <button type="submit" disabled><i class="fas fa-paper-plane"></i></button>
             </form>
         </div>
     </div>
 </div>
 
-<!-- Call Screens -->
+<!-- Call Screen -->
 <div id="call-screen" class="call-screen">
     <div class="call-container">
         <div class="call-header">
@@ -84,504 +66,179 @@
         </div>
         <audio id="remote-audio" autoplay></audio>
         <div class="call-controls">
-            <button id="end-call" class="call-btn end-call">
-                <i class="fas fa-phone-slash"></i>
-            </button>
+            <button id="end-call" class="call-btn end-call"><i class="fas fa-phone-slash"></i></button>
         </div>
     </div>
 </div>
 
+<!-- Incoming Call Modal -->
 <div id="incoming-call-modal" class="modal">
     <div class="modal-content">
-        <img id="caller-pic" src="{{ url_for('static', filename='images/default.jpg') }}" alt="Caller" class="caller-pic">
+        <img id="caller-pic" src="{{ url_for('static', filename='images/default.jpg') }}" class="caller-pic">
         <h3 id="caller-name">Caller Name</h3>
         <p>Incoming call...</p>
         <div class="call-buttons">
-            <button id="accept-call" class="call-btn accept-call">
-                <i class="fas fa-phone"></i>
-            </button>
-            <button id="decline-call" class="call-btn decline-call">
-                <i class="fas fa-phone-slash"></i>
-            </button>
+            <button id="accept-call" class="call-btn accept-call"><i class="fas fa-phone"></i></button>
+            <button id="decline-call" class="call-btn decline-call"><i class="fas fa-phone-slash"></i></button>
         </div>
     </div>
 </div>
-
 {% endblock %}
 
 {% block extra_css %}
 <style>
-/* Call-related styles */
-.call-screen {
+.chat-container { display: flex; height: 100vh; }
+.sidebar { width: 250px; background: #f1f1f1; overflow-y: auto; position: relative; }
+.chat-area { flex: 1; display: flex; flex-direction: column; }
+.chat-header { padding: 10px; background: #eee; display: flex; align-items: center; }
+.messages { flex: 1; overflow-y: auto; padding: 10px; }
+.message { margin-bottom: 10px; }
+.message.sent { text-align: right; }
+.message-input { padding: 10px; background: #eee; display: flex; }
+.message-input input { flex: 1; padding: 8px; }
+.message-input button { padding: 8px; }
+
+.call-screen, .modal {
     display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.8);
+    position: fixed; top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.8);
+    justify-content: center; align-items: center;
     z-index: 1000;
-    justify-content: center;
-    align-items: center;
 }
-
-.call-container {
-    background-color: white;
-    padding: 20px;
-    border-radius: 10px;
-    text-align: center;
-    width: 300px;
-}
-
-.call-controls {
-    margin-top: 20px;
-}
-
-.call-btn {
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    border: none;
-    margin: 0 10px;
-    font-size: 20px;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.end-call {
-    background-color: #ff4444;
-    color: white;
-}
-
-.accept-call {
-    background-color: #00C851;
-    color: white;
-}
-
-.decline-call {
-    background-color: #ff4444;
-    color: white;
-}
-
-.modal {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.8);
-    z-index: 1000;
-    justify-content: center;
-    align-items: center;
-}
-
-.modal-content {
-    background-color: white;
-    padding: 20px;
-    border-radius: 10px;
-    text-align: center;
-}
-
-.caller-pic {
-    width: 100px;
-    height: 100px;
-    border-radius: 50%;
-    object-fit: cover;
-    margin-bottom: 15px;
-}
-
-.call-buttons {
-    margin-top: 20px;
-}
-
-.user-item .call-btn {
-    position: absolute;
-    right: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 30px;
-    height: 30px;
-    font-size: 14px;
-    background-color: #4CAF50;
-    color: white;
-    border: none;
-}
-
-.user-item .call-btn:hover {
-    background-color: #3e8e41;
-}
-
-/* Existing chat styles remain unchanged */
+.call-container, .modal-content { background: #fff; padding: 20px; border-radius: 10px; text-align: center; }
+.call-btn { width: 50px; height: 50px; border-radius: 50%; border: none; margin: 0 10px; font-size: 20px; cursor: pointer; }
+.end-call { background: #f00; color: #fff; }
+.accept-call { background: #0a0; color: #fff; }
+.decline-call { background: #f00; color: #fff; }
+.caller-pic { width: 100px; height: 100px; border-radius: 50%; margin-bottom: 15px; }
+.user-item { position: relative; padding: 10px; cursor: pointer; }
+.user-item .call-btn { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: #4CAF50; color: #fff; width: 30px; height: 30px; }
 </style>
 {% endblock %}
 
 {% block extra_js %}
-<!-- Firebase SDK -->
-<script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-messaging-compat.js"></script>
-
-<script>
-    
-const firebaseConfig = {
-  apiKey: "AIzaSyAKzhBMcMwGjml2H1bwtYwtFoW3DL7OBIg",
-  authDomain: "chart-9e5cb.firebaseapp.com",
-  projectId: "chart-9e5cb",
-  storageBucket: "chart-9e5cb.firebasestorage.app",
-  messagingSenderId: "232200875234",
-  appId: "1:232200875234:web:565ebaee263e2831e782bb",
-  measurementId: "G-VCLEVPDYZL"
-};
-
-firebase.initializeApp(firebaseConfig);
-const messaging = firebase.messaging();
-
-navigator.serviceWorker.register('/firebase-messaging-sw.js')
-.then(function(registration) {
-  messaging.useServiceWorker(registration);
-
-  messaging.requestPermission()
-    .then(() => messaging.getToken({ vapidKey: "BLWsQIitLtauQubt_1MCft0pROgGCU9VOcn_lWnBbdHp-qJEyfD-YmvDlXFyqLaiCVn1MEQYststeVie2mncEoQ" }))
-    .then(token => {
-      console.log("FCM Token:", token);
-      // OPTIONAL: send token to your backend via fetch or socket
-    })
-    .catch(err => console.error("Permission denied", err));
-});
-</script>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 <script>
-const chatConfig = {
-    currentUserId: {{ current_user.id }},
-    defaultProfilePic: '{{ url_for('static', filename='images/default.jpg') }}'
-};
-
-document.addEventListener('DOMContentLoaded', () => {
-    const socket = io();
-    let currentChatUserId = null;
-    const messageForm = document.getElementById('message-form');
-    const messageInput = document.getElementById('message-text');
-    const messagesDiv = document.getElementById('messages');
-    const userItems = document.querySelectorAll('.user-item');
-    const chatUsername = document.getElementById('chat-username');
-    const chatStatus = document.getElementById('chat-status');
-    const submitButton = messageForm.querySelector('button');
-    
-    // WebRTC variables
-    let peerConnection;
-    let localStream;
-    let currentCall = null;
-    const iceServers = {
-        iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' }
-        ]
-    };
-
-    // Enable input when chat is selected
-    function enableChat() {
-        messageInput.disabled = false;
-        submitButton.disabled = false;
-        messageInput.focus();
-    }
-
-    // Disable input when no chat is selected
-    function disableChat() {
-        messageInput.disabled = true;
-        submitButton.disabled = true;
-    }
-
-    // Handle user selection
-    userItems.forEach(userItem => {
-        userItem.addEventListener('click', () => {
-            const userId = userItem.dataset.userId;
-            const username = userItem.querySelector('h4').textContent;
-            const status = userItem.querySelector('.last-message').textContent;
-            
-            currentChatUserId = userId;
-            chatUsername.textContent = username;
-            chatStatus.textContent = status;
-            
-            // Update chat user pic
-            const userPic = userItem.querySelector('.user-pic').src;
-            document.getElementById('chat-user-pic').src = userPic;
-            
-            enableChat();
-            messagesDiv.innerHTML = '';
-            
-            socket.emit('join', {
-                sender_id: chatConfig.currentUserId,
-                receiver_id: userId
-            });
-            
-            fetch(`/get_messages/${userId}`)
-                .then(response => response.json())
-                .then(messages => {
-                    messages.forEach(addMessageToChat);
-                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-                });
-        });
-    });
-
-    // Handle message sending
-    messageForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const messageText = messageInput.value.trim();
-        
-        if (messageText && currentChatUserId) {
-            const messageData = {
-                sender_id: chatConfig.currentUserId,
-                receiver_id: currentChatUserId,
-                content: messageText
-            };
-            
-            socket.emit('message', messageData);
-            messageInput.value = '';
-            messageInput.focus();
-        }
-    });
-
-    // Handle receiving messages
-    socket.on('message', (data) => {
-        if (currentChatUserId && 
-            (data.sender_id == currentChatUserId || data.receiver_id == currentChatUserId)) {
-            addMessageToChat(data);
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-        }
-    });
-
-    // Call functionality
-    document.querySelectorAll('.call-btn').forEach(btn => {
-        if (btn.dataset.userId) {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                startCall(btn.dataset.userId);
-            });
-        }
-    });
-
-    document.getElementById('accept-call').addEventListener('click', () => {
-        const callerId = document.getElementById('incoming-call-modal').dataset.callerId;
-        answerCall(callerId);
-        document.getElementById('incoming-call-modal').style.display = 'none';
-    });
-
-    document.getElementById('decline-call').addEventListener('click', () => {
-        const callerId = document.getElementById('incoming-call-modal').dataset.callerId;
-        declineCall(callerId);
-    });
-
-    document.getElementById('end-call').addEventListener('click', endCall);
-
-    // Call functions
-    a// Call functionality
-document.querySelectorAll('.call-btn').forEach(btn => {
-    if (btn.dataset.userId) {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation(); // Prevent selecting user
-            startCall(btn.dataset.userId);
-        });
-    }
-});
-
-document.getElementById('accept-call').addEventListener('click', () => {
-    const callerId = document.getElementById('incoming-call-modal').dataset.callerId;
-    answerCall(callerId);
-    document.getElementById('incoming-call-modal').style.display = 'none';
-});
-
-document.getElementById('decline-call').addEventListener('click', () => {
-    const callerId = document.getElementById('incoming-call-modal').dataset.callerId;
-    declineCall(callerId);
-});
-
-document.getElementById('end-call').addEventListener('click', endCall);
-
-let peerConnection;
-let localStream;
+const socket = io();
+const currentUserId = {{ current_user.id }};
+let currentChatUserId = null;
+let peerConnection = null;
+let localStream = null;
 let currentCall = null;
-
 const iceServers = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
-async function startCall(userId) {
-    try {
-        currentCall = userId;
-        localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-        peerConnection = new RTCPeerConnection(iceServers);
-        localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-
-        peerConnection.onicecandidate = event => {
-            if (event.candidate) {
-                socket.emit('ice_candidate', { candidate: event.candidate, target_user_id: userId });
-            }
-        };
-
-        peerConnection.ontrack = event => {
-            document.getElementById('remote-audio').srcObject = event.streams[0];
-        };
-
-        const offer = await peerConnection.createOffer();
-        await peerConnection.setLocalDescription(offer);
-
-        socket.emit('call', { caller_id: chatConfig.currentUserId, callee_id: userId, offer });
-
-        document.getElementById('call-status').textContent = `Calling ${getUsername(userId)}...`;
-        showCallScreen(true);
-    } catch (err) {
-        console.error(err);
-        endCall();
-    }
+function enableChat() {
+    document.getElementById('message-text').disabled = false;
+    document.querySelector('#message-form button').disabled = false;
+}
+function disableChat() {
+    document.getElementById('message-text').disabled = true;
+    document.querySelector('#message-form button').disabled = true;
 }
 
-function answerCall(callerId) {
-    navigator.mediaDevices.getUserMedia({ audio: true }).then(async stream => {
-        localStream = stream;
-        peerConnection = new RTCPeerConnection(iceServers);
-        localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-
-        peerConnection.onicecandidate = event => {
-            if (event.candidate) {
-                socket.emit('ice_candidate', { candidate: event.candidate, target_user_id: callerId });
-            }
-        };
-
-        peerConnection.ontrack = event => {
-            document.getElementById('remote-audio').srcObject = event.streams[0];
-        };
-
-        // Set the remote description (offer from caller)
-        const offer = window.incomingOffer; // you should store incoming offer from socket
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-
-        const answer = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(answer);
-
-        socket.emit('answer_call', { caller_id: callerId, callee_id: chatConfig.currentUserId, answer });
-
-        document.getElementById('call-status').textContent = `In call with ${getUsername(callerId)}`;
-        showCallScreen(true);
-    }).catch(err => {
-        console.error(err);
-        endCall();
+// --- User selection ---
+document.querySelectorAll('.user-item').forEach(item => {
+    item.addEventListener('click', () => {
+        currentChatUserId = item.dataset.userId;
+        document.getElementById('chat-username').textContent = item.querySelector('h4').textContent;
+        document.getElementById('chat-user-pic').src = item.querySelector('.user-pic').src;
+        enableChat();
+        socket.emit('join', { sender_id: currentUserId, receiver_id: currentChatUserId });
+        fetch(`/get_messages/${currentChatUserId}`).then(r=>r.json()).then(msgs=>{
+            const messagesDiv = document.getElementById('messages');
+            messagesDiv.innerHTML = '';
+            msgs.forEach(m=>{
+                const div = document.createElement('div');
+                div.className = m.sender_id == currentUserId ? 'message sent' : 'message received';
+                div.innerHTML = `<p>${m.content}</p>`;
+                messagesDiv.appendChild(div);
+            });
+        });
     });
-}
-
-function declineCall(callerId) {
-    socket.emit('answer_call', { caller_id: callerId, callee_id: chatConfig.currentUserId, accepted: false });
-    document.getElementById('incoming-call-modal').style.display = 'none';
-}
-
-function endCall() {
-    if (peerConnection) {
-        peerConnection.close();
-        peerConnection = null;
-    }
-    if (localStream) {
-        localStream.getTracks().forEach(track => track.stop());
-        localStream = null;
-    }
-    if (currentCall) {
-        socket.emit('end_call', { target_user_id: currentCall });
-        currentCall = null;
-    }
-    showCallScreen(false);
-}
-
-function showCallScreen(show) {
-    const callScreen = document.getElementById('call-screen');
-    callScreen.style.display = show ? 'flex' : 'none';
-    if (!show) document.getElementById('remote-audio').srcObject = null;
-}
-
-
-    function getUsername(userId) {
-        const userItem = document.querySelector(`.user-item[data-user-id="${userId}"]`);
-        return userItem ? userItem.querySelector('h4').textContent : 'User';
-    }
-
-    // Socket listeners for calls
-    socket.on('incoming_call', (data) => {
-        const callModal = document.getElementById('incoming-call-modal');
-        callModal.dataset.callerId = data.caller_id;
-        document.getElementById('caller-name').textContent = data.caller_name;
-        document.getElementById('caller-pic').src = data.caller_pic || chatConfig.defaultProfilePic;
-        callModal.style.display = 'flex';
-        
-        setTimeout(() => {
-            if (callModal.style.display === 'flex') {
-                declineCall(data.caller_id);
-            }
-        }, 30000);
-    });
-
-    socket.on('call_accepted', (data) => {
-        document.getElementById('call-status').textContent = `In call with ${data.callee_name}`;
-    });
-
-    socket.on('call_rejected', (data) => {
-        showCallScreen(false);
-        alert(`Call rejected: ${data.reason}`);
-    });
-
-    socket.on('ice_candidate', (data) => {
-        if (peerConnection) {
-            peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-        }
-    });
-
-    socket.on('call_ended', () => {
-        alert('Call ended by other party');
-        endCall();
-    });
-
-    // Auto-refresh messages
-    function refreshMessages() {
-        if (currentChatUserId) {
-            fetch(`/get_messages/${currentChatUserId}`)
-                .then(response => response.json())
-                .then(messages => {
-                    messagesDiv.innerHTML = '';
-                    messages.forEach(addMessageToChat);
-                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-                });
-        }
-    }
-
-    const refreshInterval = setInterval(refreshMessages, 3000);
-
-    function addMessageToChat(message) {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${message.sender_id == chatConfig.currentUserId ? 'sent' : 'received'}`;
-        messageDiv.innerHTML = `
-            <div class="message-content">
-                <p>${message.content}</p>
-                <span class="timestamp">${new Date(message.timestamp).toLocaleTimeString()}</span>
-            </div>
-        `;
-        messagesDiv.appendChild(messageDiv);
-    }
-
-    document.querySelector('.back-button').addEventListener('click', () => {
-        currentChatUserId = null;
-        chatUsername.textContent = 'Select a chat';
-        chatStatus.textContent = 'No chat selected';
-        disableChat();
-        messagesDiv.innerHTML = `
-            <div class="no-messages-placeholder">
-                <i class="fas fa-comments"></i>
-                <p>Select a chat to start messaging</p>
-            </div>
-        `;
-    });
-
-    window.addEventListener('beforeunload', () => {
-        clearInterval(refreshInterval);
-    });
-
-    disableChat();
 });
+
+// --- Sending messages ---
+document.getElementById('message-form').addEventListener('submit', e=>{
+    e.preventDefault();
+    const content = document.getElementById('message-text').value.trim();
+    if(content && currentChatUserId){
+        const data = { sender_id: currentUserId, receiver_id: currentChatUserId, content };
+        socket.emit('message', data);
+        document.getElementById('message-text').value = '';
+    }
+});
+
+// --- Receiving messages ---
+socket.on('message', data=>{
+    if(currentChatUserId && (data.sender_id==currentChatUserId || data.receiver_id==currentChatUserId)){
+        const messagesDiv = document.getElementById('messages');
+        const div = document.createElement('div');
+        div.className = data.sender_id==currentUserId ? 'message sent' : 'message received';
+        div.innerHTML = `<p>${data.content}</p>`;
+        messagesDiv.appendChild(div);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+});
+
+// --- Call buttons ---
+document.querySelectorAll('.call-btn').forEach(btn=>{
+    if(btn.dataset.userId){
+        btn.addEventListener('click', ()=>startCall(btn.dataset.userId));
+    }
+});
+document.getElementById('accept-call').addEventListener('click', ()=>{
+    answerCall(document.getElementById('incoming-call-modal').dataset.callerId);
+    document.getElementById('incoming-call-modal').style.display='none';
+});
+document.getElementById('decline-call').addEventListener('click', ()=>{
+    declineCall(document.getElementById('incoming-call-modal').dataset.callerId);
+});
+document.getElementById('end-call').addEventListener('click', endCall);
+
+// --- WebRTC Call Functions ---
+async function startCall(userId){
+    currentCall = userId;
+    localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    peerConnection = new RTCPeerConnection(iceServers);
+    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+    peerConnection.onicecandidate = e=>{ if(e.candidate) socket.emit('ice_candidate',{candidate:e.candidate,target_user_id:userId}); };
+    peerConnection.ontrack = e=>document.getElementById('remote-audio').srcObject = e.streams[0];
+    const offer = await peerConnection.createOffer();
+    await peerConnection.setLocalDescription(offer);
+    socket.emit('call',{caller_id:currentUserId,callee_id:userId,offer});
+    document.getElementById('call-status').textContent = `Calling...`;
+    document.getElementById('call-screen').style.display='flex';
+}
+
+async function answerCall(callerId){
+    localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    peerConnection = new RTCPeerConnection(iceServers);
+    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+    peerConnection.onicecandidate = e=>{ if(e.candidate) socket.emit('ice_candidate',{candidate:e.candidate,target_user_id:callerId}); };
+    peerConnection.ontrack = e=>document.getElementById('remote-audio').srcObject = e.streams[0];
+    await peerConnection.setRemoteDescription(window.incomingOffer);
+    const answer = await peerConnection.createAnswer();
+    await peerConnection.setLocalDescription(answer);
+    socket.emit('answer_call',{caller_id:callerId,callee_id:currentUserId,answer});
+    document.getElementById('call-status').textContent = `In call...`;
+    document.getElementById('call-screen').style.display='flex';
+}
+
+function declineCall(callerId){ socket.emit('answer_call',{caller_id:callerId,callee_id:currentUserId,accepted:false}); }
+function endCall(){ if(peerConnection){ peerConnection.close(); peerConnection=null; } if(localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; } if(currentCall){ socket.emit('end_call',{target_user_id:currentCall}); currentCall=null; } document.getElementById('call-screen').style.display='none'; }
+
+// --- Call socket listeners ---
+socket.on('incoming_call', data=>{
+    document.getElementById('incoming-call-modal').dataset.callerId=data.caller_id;
+    document.getElementById('caller-name').textContent=data.caller_name;
+    document.getElementById('caller-pic').src=data.caller_pic;
+    window.incomingOffer = data.offer;
+    document.getElementById('incoming-call-modal').style.display='flex';
+});
+socket.on('call_accepted', data=>document.getElementById('call-status').textContent='In call');
+socket.on('call_rejected', data=>{ alert(`Call rejected: ${data.reason}`); endCall(); });
+socket.on('ice_candidate', data=>{ if(peerConnection) peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate)); });
+socket.on('call_ended', endCall);
 </script>
 {% endblock %}
